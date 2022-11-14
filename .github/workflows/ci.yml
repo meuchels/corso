@@ -239,9 +239,6 @@ jobs:
     env:
       # TAG: ${{ needs.SetEnv.outputs.version }}
       TAG: v0.0.0
-    defaults:
-      run:
-        working-directory: src
 
     steps:
       - uses: actions/checkout@v3

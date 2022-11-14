@@ -235,9 +235,10 @@ jobs:
     needs: [SetEnv]
     environment: ${{ needs.SetEnv.outputs.environment }}
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main'
+    # if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main'
     env:
-      TAG: ${{ needs.SetEnv.outputs.version }}
+      # TAG: ${{ needs.SetEnv.outputs.version }}
+      TAG: v0.0.0
     defaults:
       run:
         working-directory: src

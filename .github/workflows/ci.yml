@@ -260,11 +260,11 @@ jobs:
           sed -i "s|\[Unreleased\]: https://github.com/alcionai/corso/compare/\(v[0-9]*.[0-9]*.[0-9]*\)...HEAD.*|[Unreleased]: https://github.com/alcionai/corso/compare/$TAG...HEAD\n[$TAG]: https://github.com/alcionai/corso/compare/\1...$TAG|" CHANGELOG.md
           cat CHANGELOG.md
 
-      - name: Commit changelog changes
-        run: |
-          set -e
-          git add CHANGELOG.md
-          git commit -m "Update CHANGELOG for release $TAG"
+      # - name: Commit changelog changes
+      #   run: |
+      #     set -e
+      #     git add CHANGELOG.md
+      #     git commit -m "Update CHANGELOG for release $TAG"
 
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v4

@@ -269,8 +269,8 @@ jobs:
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v4
         with:
-          commit-message: Update CHANGELOG for release ${env.TAG}
-          title: Update CHANGELOG for release ${env.TAG}
+          commit-message: Update CHANGELOG for release ${{ env.TAG }}
+          title: Update CHANGELOG for release ${{ env.TAG }}
           body: Update CHANGELOG file and prep it for next release.
 
   #     - name: Setup Golang with cache

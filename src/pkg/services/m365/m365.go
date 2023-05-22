@@ -120,9 +120,7 @@ func UserHasDrives(ctx context.Context, acct account.Account, userID string) (bo
 			return false, clues.Stack(graph.ErrResourceOwnerNotFound, err)
 		}
 
-		if !graph.IsErrExchangeMailFolderNotFound(err) ||
-			clues.HasLabel(err, graph.LabelStatus(http.StatusNotFound)) ||
-			!clues.HasLabel(err, graph.LabelsMysiteNotFound) {
+		if !clues.HasLabel(err, graph.LabelsMysiteNotFound) {
 			return false, err
 		}
 

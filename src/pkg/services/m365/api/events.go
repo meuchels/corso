@@ -12,6 +12,8 @@ import (
 	kjson "github.com/microsoft/kiota-serialization-json-go"
 	"github.com/microsoftgraph/msgraph-sdk-go/models"
 	"github.com/microsoftgraph/msgraph-sdk-go/users"
+	"github.com/teambition/rrule-go"
+	"golang.org/x/exp/slices"
 
 	"github.com/alcionai/corso/src/internal/common/dttm"
 	"github.com/alcionai/corso/src/internal/common/ptr"
@@ -298,6 +300,164 @@ func (c Events) GetItem(
 		Get(ctx, config)
 	if err != nil {
 		return nil, nil, graph.Stack(ctx, err)
+	}
+
+	// type == seriesMaster for recurring masters
+	if event.GetRecurrence() != nil {
+		// {
+		//   "pattern": {
+		//     "type": "weekly",
+		//     "interval": 1,
+		//     "month": 0,
+		//     "dayOfMonth": 0,
+		//     "daysOfWeek": [
+		//       "thursday"
+		//     ],
+		//     "firstDayOfWeek": "sunday",
+		//     "index": "first"
+		//   },
+		//   "range": {
+		//     "type": "endDate",
+		//     "startDate": "2023-06-01",
+		//     "endDate": "2023-11-23",
+		//     "recurrenceTimeZone": "India Standard Time",
+		//     "numberOfOccurrences": 0
+		//   }
+		// }
+
+		// add := event.GetRecurrence().GetPattern().GetAdditionalData()
+		count := ptr.Val(event.GetRecurrence().GetRange().GetNumberOfOccurrences())
+		freq := event.GetRecurrence().GetPattern().GetType().String()
+		interval := ptr.Val(event.GetRecurrence().GetPattern().GetInterval())
+		recurStart := event.GetRecurrence().GetRange().GetStartDate().String()
+		// TODO(meain) End time is optional and can be empty
+		recurEnd := event.GetRecurrence().GetRange().GetEndDate().String()
+
+		// TODO: Should we deal with timezone?
+		eventStart := ptr.Val(event.GetStart().GetDateTime())
+		start, err := time.Parse(string(dttm.M365DateTimeTimeZone), eventStart)
+		if err != nil {
+			return nil, nil, clues.Wrap(err, "parsesing start time").WithClues(ctx)
+		}
+
+		// TODO See if using recurEnd makes us miss any events
+		end, err := dttm.ParseTime(recurEnd)
+		if err != nil {
+			return nil, nil, clues.Wrap(err, "parsesing end time").WithClues(ctx)
+		}
+
+		rFreq := map[string]rrule.Frequency{
+			"weekly": rrule.WEEKLY,
+			"daily":  rrule.DAILY,
+		}[freq]
+
+		r, _ := rrule.NewRRule(rrule.ROption{
+			Freq:     rFreq,
+			Count:    int(count),
+			Until:    end.Add(24 * time.Hour),
+			Dtstart:  start,
+			Interval: int(interval),
+			// TODO Fill in the following
+			// Wkst       Weekday
+			// Bysetpos   []int
+			// Bymonth    []int
+			// Bymonthday []int
+			// Byyearday  []int
+			// Byweekno   []int
+			// Byweekday  []Weekday
+			// Byhour     []int
+			// Byminute   []int
+			// Bysecond   []int
+			// Byeaster   []int
+		})
+
+		// for _, t := range r.All() {
+		// 	fmt.Println(t)
+		// }
+
+		// TODO: Result is paginated
+		cfg := users.ItemEventsItemInstancesRequestBuilderGetRequestConfiguration{
+			QueryParameters: &users.ItemEventsItemInstancesRequestBuilderGetQueryParameters{
+				// TODO OrderBy has upstream error
+				Count: ptr.To(true), // TODO can we use this?
+				// Orderby:       []string{"start"},
+				StartDateTime: ptr.To(recurStart),
+				EndDateTime:   ptr.To(recurEnd),
+				Top:           ptr.To[int32](999), // TODO: Check and move to const
+			},
+		}
+
+		instancesResp, err := c.Stable.
+			Client().
+			Users().
+			ByUserId(userID).
+			Events().
+			ByEventId(itemID).
+			Instances().
+			Get(ctx, &cfg)
+		if err != nil {
+			return nil, nil, graph.Stack(ctx, err)
+		}
+
+		// TODO Remove sorting once upstream OrderBy is fixed
+		instances := instancesResp.GetValue()
+		slices.SortFunc[models.Eventable](instances, func(a, b models.Eventable) bool {
+			// TODO Comparing strings might not be the best call
+			return *a.GetStart().GetDateTime() < *b.GetStart().GetDateTime()
+		})
+
+		// Computing modified instances
+		// An event cannot cannot be modified past the next event or
+		// before the previous event. We can use rrule data to figure
+		// out the deleted events and their index.
+		modifiedInstances := map[int]models.Eventable{}
+		skip := 0
+		for i := range r.All() {
+			if i-skip > len(instances)-1 {
+				modifiedInstances[i] = nil // deleted
+				continue
+			}
+
+			evt := instances[i-skip]
+			start, err := time.Parse(string(dttm.M365DateTimeTimeZone), ptr.Val(evt.GetStart().GetDateTime()))
+			if err != nil {
+				return nil, nil, clues.Wrap(err, "parse evt start time").WithClues(ctx)
+			}
+
+			end, err := time.Parse(string(dttm.M365DateTimeTimeZone), ptr.Val(evt.GetEnd().GetDateTime()))
+			if err != nil {
+				return nil, nil, clues.Wrap(err, "parse evt end time").WithClues(ctx)
+			}
+
+			// TODO What if they create a recurring event with just one repeat?
+			if i == 0 {
+				if !end.Before(r.All()[i+1]) {
+					modifiedInstances[i] = nil // deleted
+					skip += 1
+				}
+				continue
+			}
+
+			if i == len(r.All())-1 {
+				if !start.After(r.All()[i-1]) {
+					modifiedInstances[i] = nil // deleted
+				}
+				continue
+			}
+
+			if !start.After(r.All()[i-1]) || !end.Before(r.All()[i+1]) {
+				modifiedInstances[i] = nil // deleted
+				skip += 1
+				continue
+			}
+
+			if evt.GetType().String() == "exception" {
+				modifiedInstances[i] = evt // modified
+				continue
+			}
+		}
+
+		fmt.Println("events.go:436 modifiedInstances:", modifiedInstances)
 	}
 
 	if ptr.Val(event.GetHasAttachments()) || HasAttachments(event.GetBody()) {

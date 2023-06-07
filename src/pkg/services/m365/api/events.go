@@ -325,15 +325,22 @@ func (c Events) GetItem(
 		//   }
 		// }
 
-		// add := event.GetRecurrence().GetPattern().GetAdditionalData()
 		count := ptr.Val(event.GetRecurrence().GetRange().GetNumberOfOccurrences())
 		freq := event.GetRecurrence().GetPattern().GetType().String()
 		interval := ptr.Val(event.GetRecurrence().GetPattern().GetInterval())
-		recurStart := event.GetRecurrence().GetRange().GetStartDate().String()
-		// TODO(meain) End time is optional and can be empty
-		recurEnd := event.GetRecurrence().GetRange().GetEndDate().String()
+		recurStartStr := event.GetRecurrence().GetRange().GetStartDate().String()
+		recurEnd := event.GetRecurrence().GetRange().GetEndDate()
 
-		// TODO: Should we deal with timezone?
+		var recurEndStr string
+		if recurEnd != nil {
+			recurEndStr = recurEnd.String()
+		} else {
+			// If no end date defined, use 1yr time window
+			recurEndStr = time.Now().Add(365 * 24 * time.Hour).Format(string(dttm.DateOnly))
+		}
+
+		// Since we are only using this to generate time slots, we
+		// don't have to deal with timezones
 		eventStart := ptr.Val(event.GetStart().GetDateTime())
 		start, err := time.Parse(string(dttm.M365DateTimeTimeZone), eventStart)
 		if err != nil {
@@ -341,7 +348,7 @@ func (c Events) GetItem(
 		}
 
 		// TODO See if using recurEnd makes us miss any events
-		end, err := dttm.ParseTime(recurEnd)
+		end, err := dttm.ParseTime(recurEndStr)
 		if err != nil {
 			return nil, nil, clues.Wrap(err, "parsesing end time").WithClues(ctx)
 		}
@@ -352,8 +359,10 @@ func (c Events) GetItem(
 		}[freq]
 
 		r, _ := rrule.NewRRule(rrule.ROption{
-			Freq:     rFreq,
-			Count:    int(count),
+			Freq:  rFreq,
+			Count: int(count),
+			// Adding one more day to `end` so that we don't miss the last day's events
+			// TODO Will this cause any issues?
 			Until:    end.Add(24 * time.Hour),
 			Dtstart:  start,
 			Interval: int(interval),
@@ -381,8 +390,8 @@ func (c Events) GetItem(
 				// TODO OrderBy has upstream error
 				Count: ptr.To(true), // TODO can we use this?
 				// Orderby:       []string{"start"},
-				StartDateTime: ptr.To(recurStart),
-				EndDateTime:   ptr.To(recurEnd),
+				StartDateTime: ptr.To(recurStartStr),
+				EndDateTime:   ptr.To(recurEndStr),
 				Top:           ptr.To[int32](999), // TODO: Check and move to const
 			},
 		}

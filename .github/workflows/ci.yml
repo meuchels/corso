@@ -7,7 +7,7 @@ on:
   pull_request:
 
   push:
-    branches: [main]
+    branches: [main, flaky-event-delete]
     tags: ["v*.*.*"]
 
   repository_dispatch:
@@ -128,7 +128,7 @@ jobs:
     needs: [Precheck, Checkout, SetM365App]
     environment: Testing
     runs-on: ubuntu-latest
-    if: (startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main') || (needs.precheck.outputs.srcfileschanged == 'true' && github.event.pull_request.head.repo.full_name == github.repository)
+    if: (startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/flaky-event-delete') || (needs.precheck.outputs.srcfileschanged == 'true' && github.event.pull_request.head.repo.full_name == github.repository)
     defaults:
       run:
         working-directory: src
@@ -180,7 +180,8 @@ jobs:
           -failfast     \
           -p 1          \
           -timeout 15m  \
-          ./... \
+           -run '^TestRestoreIntgSuite/TestRestoreEvent$' \
+           $PWD/internal/m365/exchange \
           2>&1 | tee ./testlog/gotest-ci.log | gotestfmt -hide successful-tests
 
       # Upload the original go test output as an artifact for later review.
@@ -247,124 +248,124 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-  Test-Suite-Fork:
-    needs: [Precheck]
-    environment: Testing
-    if: (!startsWith(github.ref , 'refs/tags/') && github.ref != 'refs/heads/main') && (needs.precheck.outputs.srcfileschanged == 'true' && github.event.pull_request.head.repo.full_name != github.repository)
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: src
-    env:
-      CORSO_LOG_FILE: ${{ github.workspace }}/testlog/run-fork.log
-      LOG_GRAPH_REQUESTS: true
-    steps:
-      - name: Fail check if not repository_dispatch
-        if: github.event_name != 'repository_dispatch'
-        run: |
-          echo "Workflow requires approval from a maintainer to run. It will be automatically rerun on approval."
-          exit 1
+  # Test-Suite-Fork:
+  #   needs: [Precheck]
+  #   environment: Testing
+  #   if: (!startsWith(github.ref , 'refs/tags/') && github.ref != 'refs/heads/main') && (needs.precheck.outputs.srcfileschanged == 'true' && github.event.pull_request.head.repo.full_name != github.repository)
+  #   runs-on: ubuntu-latest
+  #   defaults:
+  #     run:
+  #       working-directory: src
+  #   env:
+  #     CORSO_LOG_FILE: ${{ github.workspace }}/testlog/run-fork.log
+  #     LOG_GRAPH_REQUESTS: true
+  #   steps:
+  #     - name: Fail check if not repository_dispatch
+  #       if: github.event_name != 'repository_dispatch'
+  #       run: |
+  #         echo "Workflow requires approval from a maintainer to run. It will be automatically rerun on approval."
+  #         exit 1
 
-      - uses: marocchino/sticky-pull-request-comment@v2
-        if: github.event.client_payload.slash_command.args.named.sha != '' && contains(github.event.client_payload.pull_request.head.sha, github.event.client_payload.slash_command.args.named.sha)
-        with:
-          message: |
-            Workflow run sha specified via `ok-to-test` is not the latest commit on PR. Run canceled.
+  #     - uses: marocchino/sticky-pull-request-comment@v2
+  #       if: github.event.client_payload.slash_command.args.named.sha != '' && contains(github.event.client_payload.pull_request.head.sha, github.event.client_payload.slash_command.args.named.sha)
+  #       with:
+  #         message: |
+  #           Workflow run sha specified via `ok-to-test` is not the latest commit on PR. Run canceled.
 
-      - name: Fail check if not head of PR
-        if: github.event.client_payload.slash_command.args.named.sha != '' && contains(github.event.client_payload.pull_request.head.sha, github.event.client_payload.slash_command.args.named.sha)
-        run: |
-          echo "Workflow run sha specified is not the latest commit on PR. Exiting."
-          exit 1
+  #     - name: Fail check if not head of PR
+  #       if: github.event.client_payload.slash_command.args.named.sha != '' && contains(github.event.client_payload.pull_request.head.sha, github.event.client_payload.slash_command.args.named.sha)
+  #       run: |
+  #         echo "Workflow run sha specified is not the latest commit on PR. Exiting."
+  #         exit 1
 
-      # add comment to PR with link to workflow run
-      - uses: marocchino/sticky-pull-request-comment@v2
-        with:
-          message: |
-            Test suite run will be available at https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID
+  #     # add comment to PR with link to workflow run
+  #     - uses: marocchino/sticky-pull-request-comment@v2
+  #       with:
+  #         message: |
+  #           Test suite run will be available at https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID
 
-      # Check out merge commit
-      - name: Fork based /ok-to-test checkout
-        uses: actions/checkout@v3
-        with:
-          ref: "refs/pull/${{ github.event.client_payload.pull_request.number }}/merge"
+  #     # Check out merge commit
+  #     - name: Fork based /ok-to-test checkout
+  #       uses: actions/checkout@v3
+  #       with:
+  #         ref: "refs/pull/${{ github.event.client_payload.pull_request.number }}/merge"
 
-      - name: Setup Golang with cache
-        uses: magnetikonline/action-golang-cache@v4
-        with:
-          go-version-file: src/go.mod
+  #     - name: Setup Golang with cache
+  #       uses: magnetikonline/action-golang-cache@v4
+  #       with:
+  #         go-version-file: src/go.mod
 
-      - run: mkdir testlog
+  #     - run: mkdir testlog
 
-      # Install gotestfmt
-      - name: Set up gotestfmt
-        run: go install github.com/gotesttools/gotestfmt/v2/cmd/gotestfmt@latest
+  #     # Install gotestfmt
+  #     - name: Set up gotestfmt
+  #       run: go install github.com/gotesttools/gotestfmt/v2/cmd/gotestfmt@latest
 
-      # AWS creds
-      - name: Configure AWS credentials from Test account
-        uses: aws-actions/configure-aws-credentials@v2
-        with:
-          role-to-assume: ${{ secrets.AWS_IAM_ROLE }}
-          role-session-name: integration-testing
-          aws-region: us-east-1
+  #     # AWS creds
+  #     - name: Configure AWS credentials from Test account
+  #       uses: aws-actions/configure-aws-credentials@v2
+  #       with:
+  #         role-to-assume: ${{ secrets.AWS_IAM_ROLE }}
+  #         role-session-name: integration-testing
+  #         aws-region: us-east-1
 
-      # run the tests
-      - name: Integration Tests
-        env:
-          AZURE_CLIENT_ID: ${{ secrets.CLIENT_ID }}
-          AZURE_CLIENT_SECRET: ${{ secrets.CLIENT_SECRET }}
-          AZURE_TENANT_ID: ${{ secrets.TENANT_ID }}
-          CORSO_CI_TESTS: true
-          CORSO_M365_TEST_USER_ID: ${{ vars.CORSO_M365_TEST_USER_ID }}
-          CORSO_PASSPHRASE: ${{ secrets.INTEGRATION_TEST_CORSO_PASSPHRASE }}
-        run: |
-          set -euo pipefail
-          go test \
-          -json   \
-          -v      \
-          -timeout 15m  \
-          ./... \
-          2>&1 | tee ./testlog/gotest-fork.log | gotestfmt -hide successful-tests
+  #     # run the tests
+  #     - name: Integration Tests
+  #       env:
+  #         AZURE_CLIENT_ID: ${{ secrets.CLIENT_ID }}
+  #         AZURE_CLIENT_SECRET: ${{ secrets.CLIENT_SECRET }}
+  #         AZURE_TENANT_ID: ${{ secrets.TENANT_ID }}
+  #         CORSO_CI_TESTS: true
+  #         CORSO_M365_TEST_USER_ID: ${{ vars.CORSO_M365_TEST_USER_ID }}
+  #         CORSO_PASSPHRASE: ${{ secrets.INTEGRATION_TEST_CORSO_PASSPHRASE }}
+  #       run: |
+  #         set -euo pipefail
+  #         go test \
+  #         -json   \
+  #         -v      \
+  #         -timeout 15m  \
+  #         ./... \
+  #         2>&1 | tee ./testlog/gotest-fork.log | gotestfmt -hide successful-tests
 
-      # Upload the original go test log as an artifact for later review.
-      - name: Upload test log
-        if: failure()
-        uses: actions/upload-artifact@v3
-        with:
-          name: fork-test-log
-          path: src/testlog/*
-          if-no-files-found: error
-          retention-days: 14
+  #     # Upload the original go test log as an artifact for later review.
+  #     - name: Upload test log
+  #       if: failure()
+  #       uses: actions/upload-artifact@v3
+  #       with:
+  #         name: fork-test-log
+  #         path: src/testlog/*
+  #         if-no-files-found: error
+  #         retention-days: 14
 
-      # Update check run called "Test-Suite-Fork"
-      - uses: actions/github-script@v6
-        id: update-check-run
-        if: failure()
-        env:
-          number: ${{ github.event.client_payload.pull_request.number }}
-          job: ${{ github.job }}
-          # Conveniently, job.status maps to https://developer.github.com/v3/checks/runs/#update-a-check-run
-          conclusion: ${{ job.status }}
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const { data: pull } = await github.rest.pulls.get({
-              ...context.repo,
-              pull_number: process.env.number
-            });
-            const ref = pull.head.sha;
-            const { data: checks } = await github.rest.checks.listForRef({
-              ...context.repo,
-              ref
-            });
-            const check = checks.check_runs.filter(c => c.name === process.env.job);
-            const { data: result } = await github.rest.checks.update({
-              ...context.repo,
-              check_run_id: check[0].id,
-              status: 'completed',
-              conclusion: process.env.conclusion
-            });
-            return result;
+  #     # Update check run called "Test-Suite-Fork"
+  #     - uses: actions/github-script@v6
+  #       id: update-check-run
+  #       if: failure()
+  #       env:
+  #         number: ${{ github.event.client_payload.pull_request.number }}
+  #         job: ${{ github.job }}
+  #         # Conveniently, job.status maps to https://developer.github.com/v3/checks/runs/#update-a-check-run
+  #         conclusion: ${{ job.status }}
+  #       with:
+  #         github-token: ${{ secrets.GITHUB_TOKEN }}
+  #         script: |
+  #           const { data: pull } = await github.rest.pulls.get({
+  #             ...context.repo,
+  #             pull_number: process.env.number
+  #           });
+  #           const ref = pull.head.sha;
+  #           const { data: checks } = await github.rest.checks.listForRef({
+  #             ...context.repo,
+  #             ref
+  #           });
+  #           const check = checks.check_runs.filter(c => c.name === process.env.job);
+  #           const { data: result } = await github.rest.checks.update({
+  #             ...context.repo,
+  #             check_run_id: check[0].id,
+  #             status: 'completed',
+  #             conclusion: process.env.conclusion
+  #           });
+  #           return result;
 
   # ----------------------------------------------------------------------------------------------------
   # --- Source Code Linting ----------------------------------------------------------------------------

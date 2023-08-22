@@ -415,6 +415,7 @@ func (r repository) NewMaintenance(
 		ctx,
 		r.Opts,
 		r.dataLayer,
+		store.NewWrapper(r.modelStore),
 		mOpts,
 		r.Bus)
 }

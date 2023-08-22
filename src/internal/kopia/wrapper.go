@@ -663,6 +663,10 @@ func translateSafety(
 
 func translateMode(t repository.MaintenanceType) (maintenance.Mode, error) {
 	switch t {
+	// TODO(ashmrtn): Remove this case once we're ready to release the cleanup
+	// feature.
+	case repository.CompletePlusMaintenance:
+		fallthrough
 	case repository.CompleteMaintenance:
 		return maintenance.ModeFull, nil
 

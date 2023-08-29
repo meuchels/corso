@@ -143,6 +143,7 @@ func (suite *CollectionSuite) TestNewCollection_state() {
 			t := suite.T()
 
 			c := NewCollection(
+				nil,
 				"g",
 				test.curr, test.prev, test.loc,
 				0,

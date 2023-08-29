@@ -75,13 +75,13 @@ func (c Channels) NewChannelMessageDeltaPager(
 	}
 }
 
-// GetChannelMessagesDelta fetches a delta of all messages in the channel.
-func (c Channels) GetChannelMessagesDelta(
+// GetChannelMessageIDsDelta fetches a delta of all messages in the channel.
+func (c Channels) GetChannelMessageIDsDelta(
 	ctx context.Context,
 	teamID, channelID, prevDelta string,
-) ([]models.ChatMessageable, DeltaUpdate, error) {
+) (map[string]struct{}, DeltaUpdate, error) {
 	var (
-		vs               = []models.ChatMessageable{}
+		vs               = map[string]struct{}{}
 		pager            = c.NewChannelMessageDeltaPager(teamID, channelID)
 		invalidPrevDelta = len(prevDelta) == 0
 		newDeltaLink     string
@@ -109,7 +109,9 @@ func (c Channels) GetChannelMessagesDelta(
 			return nil, DeltaUpdate{}, graph.Wrap(ctx, err, "extracting channels from response")
 		}
 
-		vs = append(vs, vals...)
+		for _, v := range vals {
+			vs[ptr.Val(v.GetId())] = struct{}{}
+		}
 
 		nextLink, deltaLink := NextAndDeltaLink(page)
 

@@ -20,6 +20,7 @@ import (
 	"github.com/alcionai/corso/src/internal/tester/tconfig"
 	"github.com/alcionai/corso/src/internal/version"
 	"github.com/alcionai/corso/src/pkg/account"
+	"github.com/alcionai/corso/src/pkg/backup/details"
 	"github.com/alcionai/corso/src/pkg/control"
 	"github.com/alcionai/corso/src/pkg/fault"
 	"github.com/alcionai/corso/src/pkg/path"
@@ -38,8 +39,11 @@ type mockBackupHandler struct {
 	protectedResource string
 	channels          []models.Channelable
 	channelsErr       error
-	messages          []models.ChatMessageable
+	messageIDs        map[string]struct{}
 	messagesErr       error
+	messages          map[string]models.ChatMessageable
+	info              map[string]*details.GroupsInfo
+	getMessageErr     map[string]error
 	include           bool
 }
 
@@ -47,11 +51,11 @@ func (bh mockBackupHandler) getChannels(context.Context) ([]models.Channelable, 
 	return bh.channels, bh.channelsErr
 }
 
-func (bh mockBackupHandler) getChannelMessagesDelta(
+func (bh mockBackupHandler) getChannelMessageIDsDelta(
 	_ context.Context,
 	_, _ string,
-) ([]models.ChatMessageable, api.DeltaUpdate, error) {
-	return bh.messages, api.DeltaUpdate{}, bh.messagesErr
+) (map[string]struct{}, api.DeltaUpdate, error) {
+	return bh.messageIDs, api.DeltaUpdate{}, bh.messagesErr
 }
 
 func (bh mockBackupHandler) includeContainer(
@@ -74,6 +78,13 @@ func (bh mockBackupHandler) canonicalPath(
 			path.GroupsService,
 			path.ChannelMessagesCategory,
 			false)
+}
+
+func (bh mockBackupHandler) getChannelMessage(
+	_ context.Context,
+	_, _, itemID string,
+) (models.ChatMessageable, *details.GroupsInfo, error) {
+	return bh.messages[itemID], bh.info[itemID], bh.getMessageErr[itemID]
 }
 
 // ---------------------------------------------------------------------------

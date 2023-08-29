@@ -231,11 +231,7 @@ func (s *groups) AllData() []GroupsScope {
 // If any slice is empty, it defaults to [selectors.None]
 func (s *groups) Channels(channels []string) []GroupsScope {
 	return []GroupsScope{
-		makeInfoScope[GroupsScope](
-			GroupsChannel,
-			GroupsInfoChannel,
-			channels,
-			filters.Equal),
+		makeScope[GroupsScope](GroupsChannel, channels),
 	}
 }
 

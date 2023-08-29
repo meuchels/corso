@@ -681,7 +681,7 @@ func buildKopiaDirs(
 	), nil
 }
 
-type treeMap struct {
+type snapshotParams struct {
 	// path.Path representing the node's path. This is passed as a parameter to
 	// the stream item function so that even baseDir directories can properly
 	// generate the full path of items.
@@ -690,8 +690,6 @@ type treeMap struct {
 	// base snapshot.
 	prevPath path.Path
 
-	// Child directories of this directory.
-	childDirs map[string]*treeMap
 	// Reference to data pulled from the external service. Contains only items in
 	// this directory. Does not contain references to subdirectories.
 	collection data.BackupCollection
@@ -708,6 +706,12 @@ type treeMap struct {
 	// kopia files and the kopia directories in the base entry because we're also
 	// doing selective subtree pruning during hierarchy merging.
 	subtreeChanged bool
+}
+
+type treeMap struct {
+	snapshotParams
+	// Child directories of this directory.
+	childDirs map[string]*treeMap
 }
 
 func newTreeMap() *treeMap {

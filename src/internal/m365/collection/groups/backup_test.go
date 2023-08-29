@@ -2,7 +2,6 @@ package groups
 
 import (
 	"context"
-	"sync"
 	"testing"
 
 	"github.com/alcionai/clues"
@@ -47,6 +46,7 @@ type mockBackupHandler struct {
 func (bh mockBackupHandler) getChannels(context.Context) ([]models.Channelable, error) {
 	return bh.channels, bh.channelsErr
 }
+
 func (bh mockBackupHandler) getChannelMessagesDelta(
 	_ context.Context,
 	_, _ string,
@@ -233,14 +233,6 @@ func (suite *UnitSuite) TestPopulateCollections() {
 // ---------------------------------------------------------------------------
 // Integration tests
 // ---------------------------------------------------------------------------
-
-func newStatusUpdater(t *testing.T, wg *sync.WaitGroup) func(status *support.ControllerOperationStatus) {
-	updater := func(status *support.ControllerOperationStatus) {
-		defer wg.Done()
-	}
-
-	return updater
-}
 
 type BackupIntgSuite struct {
 	tester.Suite

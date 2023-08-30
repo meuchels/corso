@@ -402,7 +402,6 @@ const (
 
 	// channel and drive selection
 	GroupsInfoSiteLibraryDrive groupsCategory = "GroupsInfoSiteLibraryDrive"
-	GroupsInfoChannel          groupsCategory = "GroupsInfoChannel"
 
 	// data contained within details.ItemInfo
 	GroupsInfoChannelMessageCreatedAfter    groupsCategory = "GroupsInfoChannelMessageCreatedAfter"
@@ -665,18 +664,6 @@ func (s GroupsScope) matchesInfo(dii details.ItemInfo) bool {
 		}
 
 		return matchesAny(s, GroupsInfoSiteLibraryDrive, ds)
-	case GroupsInfoChannel:
-		ds := []string{}
-
-		if len(info.ChannelID) > 0 {
-			ds = append(ds, info.ChannelID)
-		}
-
-		if len(info.ChannelName) > 0 {
-			ds = append(ds, info.ChannelName)
-		}
-
-		return matchesAny(s, GroupsInfoChannel, ds)
 	case GroupsInfoChannelMessageCreator:
 		i = info.MessageCreator
 	case GroupsInfoChannelMessageCreatedAfter, GroupsInfoChannelMessageCreatedBefore:
